@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import uuid
 from streamlit_gsheets import GSheetsConnection
 
 # Configuração da página
@@ -89,7 +90,6 @@ if btn_agendar:
             )
         else:
            # Prepara a nova linha
-        import uuid
         nova_reserva = pd.DataFrame(
             [
                 {
