@@ -50,7 +50,7 @@ with st.form("form_reserva", clear_on_submit=True):
         turno = st.selectbox("Turno:", ["Manhã", "Tarde", "Noite"])
         aula = st.selectbox(
             "Aula / Horário:",
-            ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula, 6ª Aula"],
+            ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"],
         )
 
     btn_agendar = st.form_submit_button("Confirmar Reserva")
