@@ -48,10 +48,21 @@ LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 LISTA_AULAS = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula"]
 
 # =========================================================
-# IDENTIFICAÇÃO DO PROFESSOR (Validação exclusiva por E-mail)
+# IDENTIFICAÇÃO DO PROFESSOR (Com ícone personalizado icone.png)
 # =========================================================
 st.markdown("---")
-st.subheader("👤 Identificação do Professor")
+
+# Exibe o icone.png ao lado do título
+col_ico, col_tit = st.columns([0.06, 0.94])
+with col_ico:
+    caminho_icone = os.path.join(DIR_APP, "icone.png")
+    if os.path.exists(caminho_icone):
+        st.image(caminho_icone, width=32)
+    elif os.path.exists("icone.png"):
+        st.image("icone.png", width=32)
+
+with col_tit:
+    st.subheader("Identificação do Professor")
 
 col_nome, col_email = st.columns(2)
 with col_nome:
