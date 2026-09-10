@@ -60,14 +60,14 @@ if nome_professor and email_professor:
         # Se os dados estiverem válidos, libera o acesso às abas
         aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
 
-        # =========================================================
-        # ABA 1: NOVA RESERVA
+       # =========================================================
+        # ABA 1: NOVA RESERVA (Validação Antiduplicação Reforçada)
         # =========================================================
         with aba_criar:
             st.subheader("Agendar Equipamento")
             
             hoje = datetime.date.today()
-            data_reserva = st.date_input("Data da Reserva:", min_value=hoje, value=hoje)
+            data_reserva = st.date_input("Data da Reserva:", min_value=hoje, value=hoje, format="DD/MM/YYYY")
             
             if data_reserva.weekday() in [5, 6]:
                 st.warning("⚠️ Atenção: A data selecionada é um fim de semana.")
@@ -84,25 +84,30 @@ if nome_professor and email_professor:
                 if data_reserva.weekday() in [5, 6]:
                     st.error("❌ Não é possível realizar reservas para sábados ou domingos.")
                 else:
-                    # Checa conflitos de reserva
                     conflito = False
                     if not df_reservas.empty:
+                        # Converte a coluna Data da planilha para o formato puro de data (para comparação perfeita)
+                        datas_planilha = pd.to_datetime(df_reservas["Data"], dayfirst=True, errors="coerce").dt.date
+
+                        # Busca conflitos exatos de Equipamento, Data, Turno e Aula
                         linhas_conflito = df_reservas[
-                            (df_reservas["Equipamento"] == equipamento) &
-                            (df_reservas["Data"] == str(data_reserva)) &
-                            (df_reservas["Turno"] == turno) &
-                            (df_reservas["Aula"] == aula)
+                            (df_reservas["Equipamento"].astype(str).str.strip() == equipamento.strip()) &
+                            (datas_planilha == data_reserva) &
+                            (df_reservas["Turno"].astype(str).str.strip() == turno.strip()) &
+                            (df_reservas["Aula"].astype(str).str.strip() == aula.strip())
                         ]
                         if len(linhas_conflito) > 0:
                             conflito = True
 
                     if conflito:
-                        st.error(f"❌ **CONFLITO:** O equipamento **{equipamento}** já foi reservado para este horário.")
+                        st.error(f"❌ **CONFLITO DE RESERVA:** O equipamento **{equipamento}** já está reservado no dia **{data_reserva.strftime('%d/%m/%Y')}** ({turno} - {aula}).")
                     else:
-                        # Registra ID, Data, Turno, Aula, Equipamento, Nome e E-mail
+                        # Salva a data no padrão brasileiro DD/MM/AAAA na planilha
+                        data_formatada = data_reserva.strftime("%d/%m/%Y")
+                        
                         nova_reserva = pd.DataFrame([{
                             "ID": str(uuid.uuid4())[:8],
-                            "Data": str(data_reserva),
+                            "Data": data_formatada,
                             "Turno": turno,
                             "Aula": aula,
                             "Equipamento": equipamento,
@@ -121,7 +126,6 @@ if nome_professor and email_professor:
         with aba_gerenciar:
             st.subheader(f"Reservas de {nome_professor}")
 
-            # Busca reservas associadas ao e-mail digitado
             minhas_reservas = df_reservas[df_reservas["Email"].astype(str).str.lower() == email_professor]
 
             if minhas_reservas.empty:
@@ -149,19 +153,22 @@ if nome_professor and email_professor:
                         st.success("Reserva excluída com sucesso!")
                         st.rerun()
 
-             # Alterar Reserva
+                # Alterar Reserva
                 with col_alt:
                     st.markdown("### ✏️ Editar Dados")
+                    
+                    data_obj_atual = pd.to_datetime(reserva_atual["Data"], dayfirst=True, errors="coerce").date()
+                    if pd.isna(data_obj_atual):
+                        data_obj_atual = hoje
+
                     nova_data = st.date_input(
-                       nova_data = st.date_input(
                         "Nova Data:", 
-                        value=pd.to_datetime(reserva_atual["Data"]).date(),
+                        value=data_obj_atual,
                         min_value=hoje,
                         format="DD/MM/YYYY",
                         key=f"edit_data_{reserva_id_selecionada}"
                     )
                     
-                    # Identifica os índices atuais para pré-selecionar no campo
                     idx_eq = LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]) if reserva_atual["Equipamento"] in LISTA_EQUIPAMENTOS else 0
                     idx_tur = LISTA_TURNOS.index(reserva_atual["Turno"]) if reserva_atual["Turno"] in LISTA_TURNOS else 0
                     idx_aul = LISTA_AULAS.index(reserva_atual["Aula"]) if reserva_atual["Aula"] in LISTA_AULAS else 0
@@ -172,19 +179,20 @@ if nome_professor and email_professor:
 
                     if st.button("Salvar Alterações"):
                         df_outras = df_reservas[df_reservas["ID"] != reserva_id_selecionada]
+                        datas_outras = pd.to_datetime(df_outras["Data"], dayfirst=True, errors="coerce").dt.date
                         
                         conflito_edicao = df_outras[
-                            (df_outras["Equipamento"] == novo_equipamento) &
-                            (df_outras["Data"] == str(nova_data)) &
-                            (df_outras["Turno"] == novo_turno) &
-                            (df_outras["Aula"] == nova_aula)
+                            (df_outras["Equipamento"].astype(str).str.strip() == novo_equipamento.strip()) &
+                            (datas_outras == nova_data) &
+                            (df_outras["Turno"].astype(str).str.strip() == novo_turno.strip()) &
+                            (df_outras["Aula"].astype(str).str.strip() == nova_aula.strip())
                         ]
 
                         if len(conflito_edicao) > 0:
-                            st.error("❌ Conflito! Equipamento indisponível nesta data/horário.")
+                            st.error("❌ Conflito! Equipamento indisponível nesta data e horário.")
                         else:
                             df_reservas.loc[df_reservas["ID"] == reserva_id_selecionada, ["Data", "Equipamento", "Turno", "Aula", "Professor", "Email"]] = [
-                                str(nova_data), novo_equipamento, novo_turno, nova_aula, nome_professor, email_professor
+                                nova_data.strftime("%d/%m/%Y"), novo_equipamento, novo_turno, nova_aula, nome_professor, email_professor
                             ]
                             conn.update(worksheet="Página1", data=df_reservas)
                             st.success("✅ Reserva atualizada com sucesso!")
