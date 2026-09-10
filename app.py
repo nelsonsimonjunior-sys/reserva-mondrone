@@ -37,27 +37,23 @@ LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 LISTA_AULAS = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula"]
 
 # =========================================================
-# IDENTIFICAÇÃO DO PROFESSOR (Nome + Validação de E-mail)
+# IDENTIFICAÇÃO DO PROFESSOR (Validação exclusiva por E-mail)
 # =========================================================
 st.markdown("---")
 st.subheader("👤 Identificação do Professor")
 
 col_nome, col_email = st.columns(2)
 with col_nome:
-    nome_professor = st.text_input("Nome Completo:").strip()
+    nome_professor = st.text_input("Nome:").strip()
 with col_email:
     email_professor = st.text_input("E-mail Institucional (@escola.pr.gov.br):").strip().lower()
 
-# Função simples para validar o formato do e-mail
-def email_valido(email):
-    return "@" in email and "." in email
-
-# Verifica se ambos os campos foram preenchidos e se o e-mail é válido
+# Apenas valida se o e-mail pertence ao domínio institucional da escola
 if nome_professor and email_professor:
-    if not email_valido(email_professor):
-        st.warning("⚠️ **E-mail inválido:** Digite um e-mail correto (exemplo: `nome@escola.pr.gov.br`).")
+    if not email_professor.endswith("@escola.pr.gov.br"):
+        st.warning("⚠️ **E-mail inválido:** Digite seu e-mail institucional terminado em `@escola.pr.gov.br`.")
     else:
-        # Se os dados estiverem válidos, libera o acesso às abas
+        # Libera as abas do sistema
         aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
 
        # =========================================================
