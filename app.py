@@ -149,17 +149,19 @@ if nome_professor and email_professor:
                         st.success("Reserva excluída com sucesso!")
                         st.rerun()
 
-                # Alterar Reserva
+             # Alterar Reserva
                 with col_alt:
                     st.markdown("### ✏️ Editar Dados")
-                   nova_data = st.date_input(
-    "Nova Data:", 
-    value=pd.to_datetime(reserva_atual["Data"]).date(),
-    min_value=hoje,
-    format="DD/MM/YYYY",
-    key="edit_data"
-)
-                    
+                    nova_data = st.date_input(
+                        "Nova Data:", 
+                        value=pd.to_datetime(reserva_atual["Data"]).date(),
+                        min_value=hoje,
+                        format="DD/MM/YYYY",
+                        key="edit_data"
+                    )
+                    novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]), key="edit_eq")
+                    novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=LISTA_TURNOS.index(reserva_atual["Turno"]), key="edit_tur")
+                    nova_aula = st.selectbox("Nova Aula:", LISTA_AULAS, index=LISTA_AULAS.index(reserva_atual["Aula"]), key="edit_aul")
                     novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]), key="edit_eq")
                     novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=LISTA_TURNOS.index(reserva_atual["Turno"]), key="edit_tur")
                     nova_aula = st.selectbox("Nova Aula:", LISTA_AULAS, index=LISTA_AULAS.index(reserva_atual["Aula"]), key="edit_aul")
