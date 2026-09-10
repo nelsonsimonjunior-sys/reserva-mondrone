@@ -7,13 +7,13 @@ from streamlit_gsheets import GSheetsConnection
 # 1. Configuração da página e layout
 st.set_page_config(
     page_title="Reserva de Equipamentos - Colégio Mondrone",
-    page_icon="logo.png"
+    page_icon="LogoMondrone.jpg"
 )
 
 # Topo com a Logo e Título
 col_logo, col_titulo = st.columns([1, 4])
 with col_logo:
-    st.image("logo.png", width=100)
+    st.image("LogoMondrone.jpg", width=100)
 with col_titulo:
     st.title("Reserva de Equipamentos")
     st.write("**Colégio Mondrone**")
