@@ -153,11 +153,11 @@ if nome_professor and email_professor:
                 with col_alt:
                     st.markdown("### ✏️ Editar Dados")
                     nova_data = st.date_input(
-                        "Nova Data:", 
-                        value=datetime.datetime.strptime(str(reserva_atual["Data"]), "%Y-%m-%d").date(),
-                        min_value=hoje,
-                        key="edit_data"
-                    )
+    "Nova Data:", 
+    value=pd.to_datetime(reserva_atual["Data"]).date(),
+    min_value=hoje,
+    key="edit_data"
+)
                     novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]), key="edit_eq")
                     novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=LISTA_TURNOS.index(reserva_atual["Turno"]), key="edit_tur")
                     nova_aula = st.selectbox("Nova Aula:", LISTA_AULAS, index=LISTA_AULAS.index(reserva_atual["Aula"]), key="edit_aul")
