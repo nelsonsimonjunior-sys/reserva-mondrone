@@ -88,18 +88,21 @@ if btn_agendar:
                 f"❌ **CONFLITO DE AGENDA:** O equipamento **{equipamento}** já foi reservado para a **{aula} ({turno})** no dia **{data_reserva}**!"
             )
         else:
-            # Prepara a nova linha
-            nova_reserva = pd.DataFrame(
-                [
-                    {
-                        "Professor": professor,
-                        "Equipamento": equipamento,
-                        "Data": str(data_reserva),
-                        "Turno": turno,
-                        "Aula": aula,
-                    }
-                ]
-            )
+           # Prepara a nova linha
+        import uuid
+        
+        nova_reserva = pd.DataFrame(
+            [
+                {
+                    "ID": str(uuid.uuid4())[:8],
+                    "Data": str(data_reserva),
+                    "Turno": turno,
+                    "Aula": aula,
+                    "Equipamento": equipamento,
+                    "Professor": professor,
+                }
+            ]
+        )
 
             # Adiciona a nova linha à planilha existente
             df_atualizado = pd.concat(
