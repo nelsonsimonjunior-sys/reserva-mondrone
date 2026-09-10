@@ -56,11 +56,18 @@ if nome_professor and email_professor:
         # Libera as abas do sistema
         aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
 
-       # =========================================================
-        # ABA 1: NOVA RESERVA (Validação Antiduplicação Reforçada)
+      # Libera as abas do sistema
+        aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
+
+        # =========================================================
+        # ABA 1: NOVA RESERVA
         # =========================================================
         with aba_criar:
             st.subheader("Agendar Equipamento")
+
+            # Exibe a mensagem de sucesso se ela tiver sido guardada após o rerun
+            if "sucesso_reserva" in st.session_state:
+                st.success(st.session_state.pop("sucesso_reserva"))
             
             hoje = datetime.date.today()
             data_reserva = st.date_input("Data da Reserva:", min_value=hoje, value=hoje, format="DD/MM/YYYY")
@@ -82,10 +89,8 @@ if nome_professor and email_professor:
                 else:
                     conflito = False
                     if not df_reservas.empty:
-                        # Converte a coluna Data da planilha para o formato puro de data (para comparação perfeita)
                         datas_planilha = pd.to_datetime(df_reservas["Data"], dayfirst=True, errors="coerce").dt.date
 
-                        # Busca conflitos exatos de Equipamento, Data, Turno e Aula
                         linhas_conflito = df_reservas[
                             (df_reservas["Equipamento"].astype(str).str.strip() == equipamento.strip()) &
                             (datas_planilha == data_reserva) &
@@ -98,7 +103,6 @@ if nome_professor and email_professor:
                     if conflito:
                         st.error(f"❌ **CONFLITO DE RESERVA:** O equipamento **{equipamento}** já está reservado no dia **{data_reserva.strftime('%d/%m/%Y')}** ({turno} - {aula}).")
                     else:
-                        # Salva a data no padrão brasileiro DD/MM/AAAA na planilha
                         data_formatada = data_reserva.strftime("%d/%m/%Y")
                         
                         nova_reserva = pd.DataFrame([{
@@ -113,7 +117,9 @@ if nome_professor and email_professor:
 
                         df_atualizado = pd.concat([df_reservas, nova_reserva], ignore_index=True)
                         conn.update(worksheet="Página1", data=df_atualizado)
-                        st.success("✅ **Reserva realizada com sucesso!**")
+                        
+                        # Salva a mensagem na memória da sessão ANTES do rerun
+                        st.session_state["sucesso_reserva"] = "✅ **Reserva realizada com sucesso!**"
                         st.rerun()
 
         # =========================================================
@@ -121,6 +127,9 @@ if nome_professor and email_professor:
         # =========================================================
         with aba_gerenciar:
             st.subheader(f"Reservas de {nome_professor}")
+
+            if "sucesso_gerenciar" in st.session_state:
+                st.success(st.session_state.pop("sucesso_gerenciar"))
 
             minhas_reservas = df_reservas[df_reservas["Email"].astype(str).str.lower() == email_professor]
 
@@ -146,7 +155,7 @@ if nome_professor and email_professor:
                     if st.button("Excluir esta Reserva"):
                         df_atualizado = df_reservas[df_reservas["ID"] != reserva_id_selecionada]
                         conn.update(worksheet="Página1", data=df_atualizado)
-                        st.success("Reserva excluída com sucesso!")
+                        st.session_state["sucesso_gerenciar"] = "✅ Reserva excluída com sucesso!"
                         st.rerun()
 
                 # Alterar Reserva
@@ -191,7 +200,7 @@ if nome_professor and email_professor:
                                 nova_data.strftime("%d/%m/%Y"), novo_equipamento, novo_turno, nova_aula, nome_professor, email_professor
                             ]
                             conn.update(worksheet="Página1", data=df_reservas)
-                            st.success("✅ Reserva atualizada com sucesso!")
+                            st.session_state["sucesso_gerenciar"] = "✅ Reserva atualizada com sucesso!"
                             st.rerun()
 
 else:
