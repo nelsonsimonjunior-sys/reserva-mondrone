@@ -48,20 +48,35 @@ LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 LISTA_AULAS = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula"]
 
 # =========================================================
-# IDENTIFICAÇÃO DO PROFESSOR (Com ícone personalizado icone.png)
+# IDENTIFICAÇÃO DO PROFESSOR (Alinhamento Perfeito com icone.png)
 # =========================================================
+import base64
+
+def carregar_b64(caminho):
+    if os.path.exists(caminho):
+        with open(caminho, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return None
+
 st.markdown("---")
 
-# Exibe o icone.png ao lado do título
-col_ico, col_tit = st.columns([0.06, 0.94])
-with col_ico:
-    caminho_icone = os.path.join(DIR_APP, "icone.png")
-    if os.path.exists(caminho_icone):
-        st.image(caminho_icone, width=32)
-    elif os.path.exists("icone.png"):
-        st.image("icone.png", width=32)
+caminho_icone = os.path.join(DIR_APP, "icone.png")
+if not os.path.exists(caminho_icone) and os.path.exists("icone.png"):
+    caminho_icone = "icone.png"
 
-with col_tit:
+b64_icone = carregar_b64(caminho_icone)
+
+if b64_icone:
+    st.markdown(
+        f"""
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+            <img src="data:image/png;base64,{b64_icone}" width="26px" height="26px" style="object-fit: contain;">
+            <span style="font-size: 1.5rem; font-weight: 600; color: #31333F;">Identificação do Professor</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+else:
     st.subheader("Identificação do Professor")
 
 col_nome, col_email = st.columns(2)
