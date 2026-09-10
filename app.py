@@ -1,6 +1,7 @@
 import datetime
 import os
 import uuid
+import base64
 import pandas as pd
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
@@ -10,7 +11,7 @@ DIR_APP = os.path.dirname(os.path.abspath(__file__))
 NOME_LOGO = "LogoMondrone.jpg"
 CAMINHO_LOGO = os.path.join(DIR_APP, NOME_LOGO)
 
-# Configuração da página (título em texto puro e imagem no ícone)
+# Configuração da página
 st.set_page_config(
     page_title="Reserva de Equipamentos - Colégio Mondrone",
     page_icon=CAMINHO_LOGO if os.path.exists(CAMINHO_LOGO) else NOME_LOGO
@@ -45,19 +46,17 @@ except Exception:
 
 LISTA_EQUIPAMENTOS = ["Tablets", "Netbooks", "Notebooks (Apenas 3º Ano)", "Projetor / Caixa de Som"]
 LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
-LISTA_AULAS = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula"]
 
-# =========================================================
-# IDENTIFICAÇÃO DO PROFESSOR (Alinhamento Perfeito com icone.png)
-# =========================================================
-import base64
-
+# Função para converter imagem em base64 (garante alinhamento exato do icone.png)
 def carregar_b64(caminho):
     if os.path.exists(caminho):
         with open(caminho, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return None
 
+# =========================================================
+# IDENTIFICAÇÃO DO PROFESSOR (Com ícone icone.png alinhado)
+# =========================================================
 st.markdown("---")
 
 caminho_icone = os.path.join(DIR_APP, "icone.png")
@@ -89,8 +88,10 @@ if nome_professor and email_professor:
     if not email_professor.endswith("@escola.pr.gov.br"):
         st.warning("⚠️ **E-mail inválido:** Digite seu e-mail institucional terminado em `@escola.pr.gov.br`.")
     else:
-        # Declaração ÚNICA das abas do sistema
         aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
+
+        # Regra de 24h de antecedência: a data mínima para reserva é AMANHÃ
+        data_minima = datetime.date.today() + datetime.timedelta(days=1)
 
         # =========================================================
         # ABA 1: NOVA RESERVA
@@ -98,12 +99,15 @@ if nome_professor and email_professor:
         with aba_criar:
             st.subheader("Agendar Equipamento")
 
-            # Exibe mensagem guardada se a página tiver sido recarregada após salvar
             if "sucesso_reserva" in st.session_state:
                 st.success(st.session_state.pop("sucesso_reserva"))
             
-            hoje = datetime.date.today()
-            data_reserva = st.date_input("Data da Reserva:", min_value=hoje, value=hoje, format="DD/MM/YYYY")
+            data_reserva = st.date_input(
+                "Data da Reserva (Mínimo 24h de antecedência):", 
+                min_value=data_minima, 
+                value=data_minima, 
+                format="DD/MM/YYYY"
+            )
             
             if data_reserva.weekday() in [5, 6]:
                 st.warning("⚠️ Atenção: A data selecionada é um fim de semana.")
@@ -113,8 +117,15 @@ if nome_professor and email_professor:
                 equipamento = st.selectbox("Equipamento:", LISTA_EQUIPAMENTOS)
             with col2:
                 turno = st.selectbox("Turno:", LISTA_TURNOS)
+            
+            # Regra da 6ª Aula exclusiva para o turno da Manhã
+            if turno == "Manhã":
+                aulas_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"]
+            else:
+                aulas_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula"]
+
             with col3:
-                aula = st.selectbox("Aula:", LISTA_AULAS)
+                aula = st.selectbox("Aula:", aulas_disponiveis)
 
             if st.button("Confirmar Reserva", type="primary"):
                 if data_reserva.weekday() in [5, 6]:
@@ -195,24 +206,32 @@ if nome_professor and email_professor:
                     st.markdown("### ✏️ Editar Dados")
                     
                     data_obj_atual = pd.to_datetime(reserva_atual["Data"], dayfirst=True, errors="coerce").date()
-                    if pd.isna(data_obj_atual):
-                        data_obj_atual = hoje
+                    if pd.isna(data_obj_atual) or data_obj_atual < data_minima:
+                        data_obj_atual = data_minima
 
                     nova_data = st.date_input(
                         "Nova Data:", 
                         value=data_obj_atual,
-                        min_value=hoje,
+                        min_value=data_minima,
                         format="DD/MM/YYYY",
                         key=f"edit_data_{reserva_id_selecionada}"
                     )
                     
                     idx_eq = LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]) if reserva_atual["Equipamento"] in LISTA_EQUIPAMENTOS else 0
                     idx_tur = LISTA_TURNOS.index(reserva_atual["Turno"]) if reserva_atual["Turno"] in LISTA_TURNOS else 0
-                    idx_aul = LISTA_AULAS.index(reserva_atual["Aula"]) if reserva_atual["Aula"] in LISTA_AULAS else 0
 
                     novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=idx_eq, key=f"edit_eq_{reserva_id_selecionada}")
                     novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=idx_tur, key=f"edit_tur_{reserva_id_selecionada}")
-                    nova_aula = st.selectbox("Nova Aula:", LISTA_AULAS, index=idx_aul, key=f"edit_aul_{reserva_id_selecionada}")
+
+                    # Regra da 6ª aula na edição
+                    if novo_turno == "Manhã":
+                        aulas_edit_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"]
+                    else:
+                        aulas_edit_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula"]
+
+                    idx_aul = aulas_edit_disponiveis.index(reserva_atual["Aula"]) if reserva_atual["Aula"] in aulas_edit_disponiveis else 0
+
+                    nova_aula = st.selectbox("Nova Aula:", aulas_edit_disponiveis, index=idx_aul, key=f"edit_aul_{reserva_id_selecionada}")
 
                     if st.button("Salvar Alterações"):
                         df_outras = df_reservas[df_reservas["ID"] != reserva_id_selecionada]
