@@ -36,10 +36,10 @@ with st.form("form_reserva", clear_on_submit=True):
         equipamento = st.selectbox(
             "Equipamento:",
             [
-                "Carrinho de Tablets 1",
-                "Carrinho de Tablets 2",
-                "Projetor / Datashow",
-                "Notebooks",
+                "Tablets",
+                "Chromebooks",
+                "NetBooks",
+                "Notebooks-Somente 3º anos",
             ],
         )
         data_reserva = st.date_input(
