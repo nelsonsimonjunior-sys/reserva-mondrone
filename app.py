@@ -5,14 +5,15 @@ import pandas as pd
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 
-# Descobre a pasta exata onde o app.py está localizado no servidor
+# Localiza o arquivo de imagem no mesmo diretório do app.py
 DIR_APP = os.path.dirname(os.path.abspath(__file__))
-CAMINHO_LOGO = os.path.join(DIR_APP, "logo.png")
+NOME_LOGO = "LogoMondrone.jpg"
+CAMINHO_LOGO = os.path.join(DIR_APP, NOME_LOGO)
 
-# Configuração da página e ícone
+# Configuração da página (título em texto puro e imagem no ícone)
 st.set_page_config(
-    page_title=" "LogoMondrone.jpg" Reserva de Equipamentos - Colégio Mondrone",
-    page_icon=CAMINHO_LOGO if os.path.exists(CAMINHO_LOGO) else "LogoMondrone.jpg"
+    page_title="Reserva de Equipamentos - Colégio Mondrone",
+    page_icon=CAMINHO_LOGO if os.path.exists(CAMINHO_LOGO) else NOME_LOGO
 )
 
 # Topo com a Logo e Título
@@ -20,8 +21,10 @@ col_logo, col_titulo = st.columns([1, 4])
 with col_logo:
     if os.path.exists(CAMINHO_LOGO):
         st.image(CAMINHO_LOGO, width=100)
+    elif os.path.exists(NOME_LOGO):
+        st.image(NOME_LOGO, width=100)
     else:
-        st.image(""LogoMondrone.jpg"", width=100)
+        st.write("🏫")
 
 with col_titulo:
     st.title("Reserva de Equipamentos")
