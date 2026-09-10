@@ -292,3 +292,15 @@ else:
                         conn.update(worksheet="Página1", data=df_reservas)
                         st.session_state["sucesso_gerenciar"] = "✅ Reserva atualizada com sucesso!"
                         st.rerun()
+
+# --- QR CODE PARA ACESSO NO CELULAR ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("📱 Acesse no Celular")
+
+# Substitua com o link REAL do seu app publicado
+url_seu_app = "https://seu-app.streamlit.app" 
+
+# Gera o QR Code automaticamente via API gratuita
+qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={url_seu_app}"
+
+st.sidebar.image(qr_url, caption="Aponte a câmera do celular para abrir")
