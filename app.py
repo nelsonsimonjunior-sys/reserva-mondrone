@@ -21,15 +21,16 @@ st.set_page_config(
 col_logo, col_titulo = st.columns([1, 4])
 with col_logo:
     if os.path.exists(CAMINHO_LOGO):
-        st.image(CAMINHO_LOGO, width=100)
+        st.image(CAMINHO_LOGO, width=110)
     elif os.path.exists(NOME_LOGO):
-        st.image(NOME_LOGO, width=100)
+        st.image(NOME_LOGO, width=110)
     else:
         st.write("🏫")
 
 with col_titulo:
     st.title("Reserva de Equipamentos")
-    st.write("**Colégio Mondrone**")
+    # 'Colégio Mondrone' em destaque com fonte maior
+    st.markdown("<h2 style='color: #4A4A4A; margin-top: -15px; font-weight: 600;'>Colégio Mondrone</h2>", unsafe_allow_html=True)
 
 # Conexão com Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
