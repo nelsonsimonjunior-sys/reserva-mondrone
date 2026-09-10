@@ -37,9 +37,9 @@ with st.form("form_reserva", clear_on_submit=True):
             "Equipamento:",
             [
                 "Tablets",
+                "Notebooks-Somente 3ºanos",
                 "Chromebooks",
-                "NetBooks",
-                "Notebooks-Somente 3º anos",
+                "Netbooks",
             ],
         )
         data_reserva = st.date_input(
@@ -50,7 +50,14 @@ with st.form("form_reserva", clear_on_submit=True):
         turno = st.selectbox("Turno:", ["Manhã", "Tarde", "Noite"])
         aula = st.selectbox(
             "Aula / Horário:",
-            ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"],
+            [
+                "1ª Aula",
+                "2ª Aula",
+                "3ª Aula",
+                "4ª Aula",
+                "5ª Aula",
+                "6ª Aula",
+            ],
         )
 
     btn_agendar = st.form_submit_button("Confirmar Reserva")
@@ -59,6 +66,10 @@ with st.form("form_reserva", clear_on_submit=True):
 if btn_agendar:
     if not professor.strip():
         st.error("⚠️ Por favor, preencha o nome do professor.")
+    elif turno != "Manhã" and aula == "6ª Aula":
+        st.error(
+            "⚠️ **Atenção:** A **6ª Aula** está disponível apenas no turno da **Manhã**."
+        )
     else:
         # Verifica se já existe uma reserva idêntica na planilha
         conflito = False
