@@ -8,7 +8,7 @@ st.set_page_config(
     page_title="Reserva de Equipamentos - Colégio Mondrone", page_icon="LogoMondrone.jpg"
 )
 
-st.title(":LogoMondrone.jpg: Reserva de Equipamentos - Colégio Mondrone")
+st.title("LogoMondrone.jpg Reserva de Equipamentos - Colégio Mondrone")
 st.write("Selecione os dados abaixo para agendar um equipamento.")
 
 # Conexão com a planilha do Google Sheets
