@@ -5,13 +5,21 @@ from streamlit_gsheets import GSheetsConnection
 
 # Configuração da página
 st.set_page_config(
-    page_title="Reserva de Equipamentos - Colégio Mondrone", page_icon="LogoMondrone.jpg"
+    page_title="Reserva de Equipamentos - Colégio Mondrone",
+    page_icon="LogoMondrone.jpg"
 )
 
-st.title("Reserva de Equipamentos-
-            Colégio Mondrone")
-st.write("Selecione os dados abaixo para agendar um equipamento.")
+# Cria 2 colunas: a primeira (menor) para a logo e a segunda (maior) para o título
+col_logo, col_titulo = st.columns([1, 4])
 
+with col_logo:
+    st.image("LogoMondrone.jpg", width=100)
+
+with col_titulo:
+    st.title("Reserva de Equipamentos")
+    st.write("Colégio Mondrone")
+
+st.write("Selecione os dados abaixo para agendar um equipamento.")
 # Conexão com a planilha do Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
