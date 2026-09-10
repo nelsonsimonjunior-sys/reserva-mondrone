@@ -1,4 +1,5 @@
 import datetime
+import os
 import uuid
 import pandas as pd
 import streamlit as st
@@ -7,13 +8,16 @@ from streamlit_gsheets import GSheetsConnection
 # 1. Configuração da página e layout
 st.set_page_config(
     page_title="Reserva de Equipamentos - Colégio Mondrone",
-    page_icon="LogoMondrone.jpg"
+    page_icon="LogoMondrone.jpg" if os.path.exists("LogoMondrone.jpg") else "🏫"
 )
 
 # Topo com a Logo e Título
 col_logo, col_titulo = st.columns([1, 4])
 with col_logo:
-    st.image("LogoMondrone.jpg", width=100)
+    if os.path.exists("logo.png"):
+        st.image("LogoMondrone.jpg", width=100)
+    else:
+        st.write("🏫")
 with col_titulo:
     st.title("Reserva de Equipamentos")
     st.write("**Colégio Mondrone**")
@@ -26,7 +30,6 @@ def carregar_dados():
 
 try:
     df_reservas = carregar_dados()
-    # Garante que a coluna 'Email' exista caso a planilha antiga não a tenha
     if "Email" not in df_reservas.columns:
         df_reservas["Email"] = ""
 except Exception:
@@ -48,15 +51,11 @@ with col_nome:
 with col_email:
     email_professor = st.text_input("E-mail Institucional (@escola.pr.gov.br):").strip().lower()
 
-# Apenas valida se o e-mail pertence ao domínio institucional da escola
 if nome_professor and email_professor:
     if not email_professor.endswith("@escola.pr.gov.br"):
         st.warning("⚠️ **E-mail inválido:** Digite seu e-mail institucional terminado em `@escola.pr.gov.br`.")
     else:
-        # Libera as abas do sistema
-        aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
-
-      # Libera as abas do sistema
+        # Declaração ÚNICA das abas do sistema
         aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
 
         # =========================================================
@@ -65,7 +64,7 @@ if nome_professor and email_professor:
         with aba_criar:
             st.subheader("Agendar Equipamento")
 
-            # Exibe a mensagem de sucesso se ela tiver sido guardada após o rerun
+            # Exibe mensagem guardada se a página tiver sido recarregada após salvar
             if "sucesso_reserva" in st.session_state:
                 st.success(st.session_state.pop("sucesso_reserva"))
             
@@ -118,7 +117,6 @@ if nome_professor and email_professor:
                         df_atualizado = pd.concat([df_reservas, nova_reserva], ignore_index=True)
                         conn.update(worksheet="Página1", data=df_atualizado)
                         
-                        # Salva a mensagem na memória da sessão ANTES do rerun
                         st.session_state["sucesso_reserva"] = "✅ **Reserva realizada com sucesso!**"
                         st.rerun()
 
@@ -204,4 +202,4 @@ if nome_professor and email_professor:
                             st.rerun()
 
 else:
-    st.info("👆 Preencha seu **Nome Completo** e **E-mail Institucional** acima para liberar o sistema.")
+    st.info("👆 Preencha seu **Nome** e **E-mail Institucional** acima para liberar o sistema.")
