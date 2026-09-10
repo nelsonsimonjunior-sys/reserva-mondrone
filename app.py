@@ -153,6 +153,7 @@ if nome_professor and email_professor:
                 with col_alt:
                     st.markdown("### ✏️ Editar Dados")
                     nova_data = st.date_input(
+                       nova_data = st.date_input(
                         "Nova Data:", 
                         value=pd.to_datetime(reserva_atual["Data"]).date(),
                         min_value=hoje,
