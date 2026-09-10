@@ -29,7 +29,6 @@ with col_logo:
 
 with col_titulo:
     st.title("Reserva de Equipamentos")
-    # 'Colégio Mondrone' em destaque com fonte maior
     st.markdown("<h2 style='color: #4A4A4A; margin-top: -15px; font-weight: 600;'>Colégio Mondrone</h2>", unsafe_allow_html=True)
 
 # Conexão com Google Sheets
@@ -48,17 +47,12 @@ except Exception:
 LISTA_EQUIPAMENTOS = ["Tablets", "Netbooks", "Notebooks (Apenas 3º Ano)", "Projetor / Caixa de Som"]
 LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 
-# Função para converter imagem em base64 (garante alinhamento exato do icone.png)
+# Função para converter imagem em base64
 def carregar_b64(caminho):
     if os.path.exists(caminho):
         with open(caminho, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return None
-
-# =========================================================
-# IDENTIFICAÇÃO DO PROFESSOR (Com formulário e botão)
-# =========================================================
-st.markdown("---")
 
 caminho_icone = os.path.join(DIR_APP, "icone.png")
 if not os.path.exists(caminho_icone) and os.path.exists("icone.png"):
@@ -66,6 +60,9 @@ if not os.path.exists(caminho_icone) and os.path.exists("icone.png"):
 
 b64_icone = carregar_b64(caminho_icone)
 
+st.markdown("---")
+
+# Cabeçalho da Identificação
 if b64_icone:
     st.markdown(
         f"""
@@ -105,8 +102,6 @@ if not st.session_state["usuario_logado"]:
             st.rerun()
 
 else:
-   else:
-    # Exibe dados do professor logado com o mesmo ícone (icone.png)
     nome_professor = st.session_state["nome_professor"]
     email_professor = st.session_state["email_professor"]
 
@@ -131,7 +126,7 @@ else:
             st.rerun()
 
     # =========================================================
-    # ÁREA DE RESERVAS (SÓ EXIBIDA APÓS CLICAR EM ACESSAR SISTEMA)
+    # ÁREA DE RESERVAS (LIBERADA APÓS LOGIN)
     # =========================================================
     aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
 
@@ -268,7 +263,6 @@ else:
                 novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=idx_eq, key=f"edit_eq_{reserva_id_selecionada}")
                 novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=idx_tur, key=f"edit_tur_{reserva_id_selecionada}")
 
-                # Regra da 6ª aula na edição
                 if novo_turno == "Manhã":
                     aulas_edit_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"]
                 else:
