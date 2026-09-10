@@ -157,14 +157,17 @@ if nome_professor and email_professor:
                         value=pd.to_datetime(reserva_atual["Data"]).date(),
                         min_value=hoje,
                         format="DD/MM/YYYY",
-                        key="edit_data"
+                        key=f"edit_data_{reserva_id_selecionada}"
                     )
-                    novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]), key="edit_eq")
-                    novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=LISTA_TURNOS.index(reserva_atual["Turno"]), key="edit_tur")
-                    nova_aula = st.selectbox("Nova Aula:", LISTA_AULAS, index=LISTA_AULAS.index(reserva_atual["Aula"]), key="edit_aul")
-                    novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]), key="edit_eq")
-                    novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=LISTA_TURNOS.index(reserva_atual["Turno"]), key="edit_tur")
-                    nova_aula = st.selectbox("Nova Aula:", LISTA_AULAS, index=LISTA_AULAS.index(reserva_atual["Aula"]), key="edit_aul")
+                    
+                    # Identifica os índices atuais para pré-selecionar no campo
+                    idx_eq = LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]) if reserva_atual["Equipamento"] in LISTA_EQUIPAMENTOS else 0
+                    idx_tur = LISTA_TURNOS.index(reserva_atual["Turno"]) if reserva_atual["Turno"] in LISTA_TURNOS else 0
+                    idx_aul = LISTA_AULAS.index(reserva_atual["Aula"]) if reserva_atual["Aula"] in LISTA_AULAS else 0
+
+                    novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=idx_eq, key=f"edit_eq_{reserva_id_selecionada}")
+                    novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=idx_tur, key=f"edit_tur_{reserva_id_selecionada}")
+                    nova_aula = st.selectbox("Nova Aula:", LISTA_AULAS, index=idx_aul, key=f"edit_aul_{reserva_id_selecionada}")
 
                     if st.button("Salvar Alterações"):
                         df_outras = df_reservas[df_reservas["ID"] != reserva_id_selecionada]
