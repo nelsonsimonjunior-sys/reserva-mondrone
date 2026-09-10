@@ -105,7 +105,7 @@ if btn_agendar:
             df_atualizado = pd.concat(
                 [df_reservas, nova_reserva], ignore_index=True
             )
-            conn.update(data=df_atualizado)
+            conn.update(worksheet="Página1", data=df_atualizado)
 
             st.success("✅ **Reserva realizada com sucesso!**")
             st.rerun()
