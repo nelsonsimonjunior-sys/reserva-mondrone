@@ -105,13 +105,26 @@ if not st.session_state["usuario_logado"]:
             st.rerun()
 
 else:
-    # Exibe dados do professor logado com botão de logout
+   else:
+    # Exibe dados do professor logado com o mesmo ícone (icone.png)
     nome_professor = st.session_state["nome_professor"]
     email_professor = st.session_state["email_professor"]
 
     col_info, col_sair = st.columns([4, 1])
     with col_info:
-        st.success(f"👤 **Professor(a):** {nome_professor} | ✉️ **E-mail:** {email_professor}")
+        if b64_icone:
+            st.markdown(
+                f"""
+                <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center; gap: 8px; color: #155724;">
+                    <img src="data:image/png;base64,{b64_icone}" width="20px" height="20px" style="object-fit: contain;">
+                    <span><b>Professor(a):</b> {nome_professor} &nbsp;|&nbsp; ✉️ <b>E-mail:</b> {email_professor}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.success(f"**Professor(a):** {nome_professor} | ✉️ **E-mail:** {email_professor}")
+
     with col_sair:
         if st.button("🔄 Trocar Usuário"):
             st.session_state["usuario_logado"] = False
