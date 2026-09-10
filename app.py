@@ -90,7 +90,6 @@ if btn_agendar:
         else:
            # Prepara a nova linha
         import uuid
-        
         nova_reserva = pd.DataFrame(
             [
                 {
