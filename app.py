@@ -5,7 +5,7 @@ from streamlit_gsheets import GSheetsConnection
 
 # Configuração da página
 st.set_page_config(
-    page_title="Reserva de Equipamentos - Colégio Mondrone", page_icon="🏫"
+    page_title="Reserva de Equipamentos - Colégio Mondrone", page_icon="LogoMondrone.jpg"
 )
 
 st.title("🏫 Reserva de Equipamentos - Colégio Mondrone")
