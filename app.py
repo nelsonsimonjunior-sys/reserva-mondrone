@@ -44,7 +44,7 @@ try:
 except Exception:
     df_reservas = pd.DataFrame(columns=["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email"])
 
-LISTA_EQUIPAMENTOS = ["Tablets", "Netbooks", "Notebooks (Apenas 3º Ano)", "Chromebooks"]
+LISTA_EQUIPAMENTOS = ["Tablets", "Netbooks", "Notebooks (Apenas 3º Ano)", "Projetor / Caixa de Som"]
 LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 
 # Função para converter imagem em base64
@@ -94,7 +94,7 @@ if not st.session_state["usuario_logado"]:
         if not nome_input or not email_input:
             st.warning("⚠️ Preencha seu **Nome** e **E-mail Institucional** para continuar.")
         elif not email_input.endswith("@escola.pr.gov.br"):
-            st.error("❌ **E-mail inválido:** Digite seu e-mail institucional terminado em `@escola.pr.gov.br`.")
+            st.error("❌ **E-mail inválido:** Digite seu e-mail institucional terminado em @escola.pr.gov.br.")
         else:
             st.session_state["nome_professor"] = nome_input
             st.session_state["email_professor"] = email_input
@@ -112,7 +112,7 @@ else:
                 f"""
                 <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center; gap: 8px; color: #155724;">
                     <img src="data:image/png;base64,{b64_icone}" width="20px" height="20px" style="object-fit: contain;">
-                    <span><b>Professor(a):</b> {nome_professor} &nbsp;|&nbsp; ✉️ <b>E-mail:</b> {email_professor}</span>
+                    <span><b>Professor(a):</b> {nome_professor}  |  ✉️ <b>E-mail:</b> {email_professor}</span>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -128,7 +128,11 @@ else:
     # =========================================================
     # ÁREA DE RESERVAS (LIBERADA APÓS LOGIN)
     # =========================================================
-    aba_criar, aba_gerenciar = st.tabs(["➕ Nova Reserva", "✏️ Minhas Reservas (Alterar / Excluir)"])
+    aba_criar, aba_gerenciar, aba_agenda = st.tabs([
+        "➕ Nova Reserva", 
+        "✏️ Minhas Reservas", 
+        "📅 Agenda Geral"
+    ])
 
     # Regra de 24h de antecedência: a data mínima para reserva é AMANHÃ
     data_minima = datetime.date.today() + datetime.timedelta(days=1)
@@ -158,7 +162,6 @@ else:
         with col2:
             turno = st.selectbox("Turno:", LISTA_TURNOS)
         
-        # Regra da 6ª Aula exclusiva para o turno da Manhã
         if turno == "Manhã":
             aulas_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"]
         else:
@@ -232,7 +235,6 @@ else:
 
             col_alt, col_exc = st.columns(2)
 
-            # Excluir Reserva
             with col_exc:
                 st.markdown("### 🗑️ Excluir Reserva")
                 if st.button("Excluir esta Reserva"):
@@ -241,7 +243,6 @@ else:
                     st.session_state["sucesso_gerenciar"] = "✅ Reserva excluída com sucesso!"
                     st.rerun()
 
-            # Alterar Reserva
             with col_alt:
                 st.markdown("### ✏️ Editar Dados")
                 
@@ -293,3 +294,33 @@ else:
                         st.session_state["sucesso_gerenciar"] = "✅ Reserva atualizada com sucesso!"
                         st.rerun()
 
+    # ---------------------------------------------------------
+    # ABA 3: AGENDA GERAL (CONSULTA DE TODOS OS AGENDAMENTOS)
+    # ---------------------------------------------------------
+    with aba_agenda:
+        st.subheader("📋 Agenda Geral de Equipamentos")
+        st.write("Consulte a disponibilidade de qualquer equipamento escolhendo a data abaixo:")
+
+        data_consulta = st.date_input(
+            "Selecione o dia para consultar:", 
+            value=datetime.date.today(), 
+            format="DD/MM/YYYY",
+            key="data_consulta_tab"
+        )
+
+        data_consulta_str = data_consulta.strftime("%d/%m/%Y")
+
+        if not df_reservas.empty:
+            reservas_dia = df_reservas[df_reservas["Data"] == data_consulta_str]
+
+            if reservas_dia.empty:
+                st.success(f"🎉 **Todos os equipamentos estão totalmente livres no dia {data_consulta_str}!**")
+            else:
+                st.info(f"📌 **Equipamentos já agendados para {data_consulta_str}:**")
+                st.dataframe(
+                    reservas_dia[["Turno", "Aula", "Equipamento", "Professor"]], 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+        else:
+            st.success(f"🎉 **Nenhum agendamento cadastrado no sistema.**")
