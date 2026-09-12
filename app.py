@@ -44,7 +44,7 @@ try:
 except Exception:
     df_reservas = pd.DataFrame(columns=["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email"])
 
-LISTA_EQUIPAMENTOS = ["Tablets", "Netbooks", "Notebooks (Apenas 3º Ano)", "Projetor / Caixa de Som"]
+LISTA_EQUIPAMENTOS = ["Tablets", "Netbooks", "Notebooks (Apenas 3º Ano)", "Chromebooks"]
 LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 
 # Função para converter imagem em base64
