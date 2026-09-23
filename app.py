@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-import gspread
 import uuid
 from datetime import date
+from streamlit_gsheets import GSheetsConnection
 
 # ---------------------------------------------------------
 # Configuração da página Streamlit
@@ -14,77 +14,67 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# Conexão com o Google Sheets via gspread / Secrets
+# Conexão oficial via GSheetsConnection (st.connection)
 # ---------------------------------------------------------
-@st.cache_resource(ttl=60)
-def get_gspread_client():
-    return gspread.service_account_from_dict(st.secrets["gcp_service_account"])
-
-try:
-    gc = get_gspread_client()
-    # Nome do ficheiro da folha de cálculo no Google Drive
-    sheet_name = st.secrets.get("SPREADSHEET_NAME", "Reservas de Equipamentos - Mondrone")
-    sh = gc.open(sheet_name)
-    worksheet = sh.worksheet("Mondrone")
-except Exception as e:
-    st.error(f"Erro ao conectar à folha de cálculo do Google Sheets: {e}")
-    st.stop()
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # ---------------------------------------------------------
-# Funções de Dados (Carregar, Guardar, Soft Delete)
+# Funções para manipulação de dados na Folha de Cálculo
 # ---------------------------------------------------------
 def carregar_dados():
-    """Carrega e trata os dados da aba Mondrone."""
-    dados = worksheet.get_all_records()
-    df = pd.DataFrame(dados)
+    """Lê os dados da aba Mondrone sem usar cache prolongado (ttl=0)."""
+    df = conn.read(worksheet="Mondrone", ttl=0)
+    df = df.dropna(how="all")  # Remove linhas totalmente vazias
     
-    # Garantir que todas as colunas necessárias existem
+    # Garantir que todas as colunas existem
     colunas_esperadas = ["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email", "Status"]
     for col in colunas_esperadas:
         if col not in df.columns:
             df[col] = ""
-    
-    # Se a coluna Status estiver em branco, define como ATIVO por padrão
-    df["Status"] = df["Status"].replace("", "ATIVO")
+            
+    # Se o Status estiver em branco ou nulo, define como ATIVO
+    df["Status"] = df["Status"].fillna("ATIVO").replace("", "ATIVO")
     return df
 
-def salvar_reserva(data_str, turno, aula, equipamento, professor, email):
-    """Adiciona uma nova reserva com Status = ATIVO."""
+def salvar_reserva(df_atual, data_str, turno, aula, equipamento, professor, email):
+    """Adiciona uma nova linha com Status = ATIVO e atualiza a folha."""
     novo_id = uuid.uuid4().hex[:8]
-    nova_linha = [
-        novo_id,
-        data_str,
-        turno,
-        aula,
-        equipamento,
-        professor,
-        email,
-        "ATIVO"  # Coluna H (8)
-    ]
-    worksheet.append_row(nova_linha)
+    nova_linha = pd.DataFrame([{
+        "ID": novo_id,
+        "Data": data_str,
+        "Turno": turno,
+        "Aula": aula,
+        "Equipamento": equipamento,
+        "Professor": professor,
+        "Email": email,
+        "Status": "ATIVO"
+    }])
+    
+    df_atualizado = pd.concat([df_atual, nova_linha], ignore_index=True)
+    conn.update(worksheet="Mondrone", data=df_atualizado)
 
-def cancelar_reserva_soft_delete(id_reserva):
-    """Muda o estado na Coluna H (8) para CANCELADO sem apagar a linha."""
-    celula = worksheet.find(id_reserva, in_column=1)
-    if celula:
-        # Coluna 8 = Coluna H (Status)
-        worksheet.update_cell(celula.row, 8, "CANCELADO")
+def cancelar_reserva_soft_delete(df_atual, id_reserva):
+    """Muda o Status da reserva para CANCELADO na folha sem apagar a linha."""
+    mask = df_atual["ID"].astype(str) == str(id_reserva)
+    if mask.any():
+        df_atual.loc[mask, "Status"] = "CANCELADO"
+        conn.update(worksheet="Mondrone", data=df_atual)
         return True
     return False
 
 # ---------------------------------------------------------
-# Interface Principal
+# Interface do Utilizador (Streamlit)
 # ---------------------------------------------------------
 st.title("💻 Sistema de Reservas de Equipamentos")
 st.subheader("Colégio Mondrone")
 
-# Carrega os dados mais recentes
+# Carrega os dados da folha
 df_todos = carregar_dados()
 
-# Filtra no Streamlit apenas os registos que NÃO foram cancelados
+# Filtra apenas os registos ATIVOS para exibição
 df_ativos = df_todos[df_todos["Status"] != "CANCELADO"]
 
-# Navegação por Separadores (Tabs)
+# Separadores (Tabs)
 tab1, tab2, tab3 = st.tabs(["📅 Reservas Ativas", "➕ Nova Reserva", "❌ Cancelar Reserva"])
 
 # ---------------------------------------------------------
@@ -93,7 +83,6 @@ tab1, tab2, tab3 = st.tabs(["📅 Reservas Ativas", "➕ Nova Reserva", "❌ Can
 with tab1:
     st.markdown("### 📋 Agendamentos Confirmados")
     if not df_ativos.empty:
-        # Exibe apenas as colunas relevantes ao utilizador
         st.dataframe(
             df_ativos[["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email"]],
             use_container_width=True,
@@ -137,7 +126,7 @@ with tab2:
                 st.error("Por favor, preencha o Nome e o E-mail do Professor.")
             else:
                 data_formatada = data_reserva.strftime("%d/%m/%Y")
-                salvar_reserva(data_formatada, turno, aula, equipamento, professor, email)
+                salvar_reserva(df_todos, data_formatada, turno, aula, equipamento, professor, email)
                 st.success(f"Reserva efetuada com sucesso para {data_formatada} ({equipamento})!")
                 st.rerun()
 
@@ -149,7 +138,6 @@ with tab3:
     st.write("O cancelamento **não elimina** dados da folha de cálculo; apenas altera o estado da reserva para `CANCELADO`.")
     
     if not df_ativos.empty:
-        # Opções formatadas para o menu de seleção
         opcoes_cancelamento = {
             f"{row['ID']} | {row['Data']} | {row['Turno']} - {row['Aula']} | {row['Equipamento']} ({row['Professor']})": row['ID']
             for _, row in df_ativos.iterrows()
@@ -161,12 +149,11 @@ with tab3:
         )
         
         id_para_cancelar = opcoes_cancelamento[reserva_selecionada_label]
-        
         confirmar = st.checkbox("Confirmo que pretendo cancelar esta reserva.")
         
         if st.button("Confirmar Cancelamento"):
             if confirmar:
-                sucesso = cancelar_reserva_soft_delete(id_para_cancelar)
+                sucesso = cancelar_reserva_soft_delete(df_todos, id_para_cancelar)
                 if sucesso:
                     st.success("Reserva marcada como CANCELADA com sucesso!")
                     st.rerun()
