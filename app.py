@@ -29,7 +29,10 @@ with col_logo:
 
 with col_titulo:
     st.title("Reserva de Equipamentos")
-    st.markdown("<h2 style='color: #4A4A4A; margin-top: -15px; font-weight: 600;'>Colégio Mondrone</h2>", unsafe_allow_html=True)
+    st.markdown(
+        "<h2 style='color: #4A4A4A; margin-top: -15px; font-weight: 600;'>Colégio Mondrone</h2>",
+        unsafe_allow_html=True
+    )
 
 # Conexão com Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -41,10 +44,25 @@ try:
     df_reservas = carregar_dados()
     if "Email" not in df_reservas.columns:
         df_reservas["Email"] = ""
+    # ALTERAÇÃO 1: Garante a coluna Status para controle do Soft Delete
+    if "Status" not in df_reservas.columns:
+        df_reservas["Status"] = "ATIVO"
+    else:
+        df_reservas["Status"] = df_reservas["Status"].fillna("ATIVO")
 except Exception:
-    df_reservas = pd.DataFrame(columns=["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email"])
+    df_reservas = pd.DataFrame(columns=[
+        "ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email", "Status"
+    ])
 
-LISTA_EQUIPAMENTOS = ["Tablets", "Netbooks", "Notebooks (Apenas 3º Ano)", "Chromebooks"]
+# Filtro de reservas ATIVAS (ignora as canceladas para pesquisas e conflitos)
+df_ativas = df_reservas[df_reservas["Status"] != "CANCELADO"].copy()
+
+LISTA_EQUIPAMENTOS = [
+    "Tablets",
+    "Netbooks",
+    "Notebooks (Apenas 3º Ano)",
+    "Chromebooks"
+]
 LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 
 # Função para converter imagem em base64
@@ -175,14 +193,14 @@ else:
                 st.error("❌ Não é possível realizar reservas para sábados ou domingos.")
             else:
                 conflito = False
-                if not df_reservas.empty:
-                    datas_planilha = pd.to_datetime(df_reservas["Data"], dayfirst=True, errors="coerce").dt.date
+                if not df_ativas.empty:
+                    datas_planilha = pd.to_datetime(df_ativas["Data"], dayfirst=True, errors="coerce").dt.date
 
-                    linhas_conflito = df_reservas[
-                        (df_reservas["Equipamento"].astype(str).str.strip() == equipamento.strip()) &
+                    linhas_conflito = df_ativas[
+                        (df_ativas["Equipamento"].astype(str).str.strip() == equipamento.strip()) &
                         (datas_planilha == data_reserva) &
-                        (df_reservas["Turno"].astype(str).str.strip() == turno.strip()) &
-                        (df_reservas["Aula"].astype(str).str.strip() == aula.strip())
+                        (df_ativas["Turno"].astype(str).str.strip() == turno.strip()) &
+                        (df_ativas["Aula"].astype(str).str.strip() == aula.strip())
                     ]
                     if len(linhas_conflito) > 0:
                         conflito = True
@@ -199,7 +217,8 @@ else:
                         "Aula": aula,
                         "Equipamento": equipamento,
                         "Professor": nome_professor,
-                        "Email": email_professor
+                        "Email": email_professor,
+                        "Status": "ATIVO"
                     }])
 
                     df_atualizado = pd.concat([df_reservas, nova_reserva], ignore_index=True)
@@ -217,12 +236,15 @@ else:
         if "sucesso_gerenciar" in st.session_state:
             st.success(st.session_state.pop("sucesso_gerenciar"))
 
-        minhas_reservas = df_reservas[df_reservas["Email"].astype(str).str.lower() == email_professor]
+        minhas_reservas = df_ativas[df_ativas["Email"].astype(str).str.lower() == email_professor]
 
         if minhas_reservas.empty:
             st.info("Nenhuma reserva encontrada para este e-mail.")
         else:
-            st.dataframe(minhas_reservas[["Data", "Turno", "Aula", "Equipamento", "Professor"]], use_container_width=True)
+            st.dataframe(
+                minhas_reservas[["Data", "Turno", "Aula", "Equipamento", "Professor"]],
+                use_container_width=True
+            )
 
             opcoes_ids = minhas_reservas["ID"].tolist()
             reserva_id_selecionada = st.selectbox(
@@ -238,9 +260,10 @@ else:
             with col_exc:
                 st.markdown("### 🗑️ Excluir Reserva")
                 if st.button("Excluir esta Reserva"):
-                    df_atualizado = df_reservas[df_reservas["ID"] != reserva_id_selecionada]
-                    conn.update(worksheet="Página1", data=df_atualizado)
-                    st.session_state["sucesso_gerenciar"] = "✅ Reserva excluída com sucesso!"
+                    # ALTERAÇÃO 2: Soft Delete (Muda o Status para CANCELADO sem excluir a linha da planilha)
+                    df_reservas.loc[df_reservas["ID"] == reserva_id_selecionada, "Status"] = "CANCELADO"
+                    conn.update(worksheet="Página1", data=df_reservas)
+                    st.session_state["sucesso_gerenciar"] = "✅ Reserva cancelada com sucesso!"
                     st.rerun()
 
             with col_alt:
@@ -274,7 +297,7 @@ else:
                 nova_aula = st.selectbox("Nova Aula:", aulas_edit_disponiveis, index=idx_aul, key=f"edit_aul_{reserva_id_selecionada}")
 
                 if st.button("Salvar Alterações"):
-                    df_outras = df_reservas[df_reservas["ID"] != reserva_id_selecionada]
+                    df_outras = df_ativas[df_ativas["ID"] != reserva_id_selecionada]
                     datas_outras = pd.to_datetime(df_outras["Data"], dayfirst=True, errors="coerce").dt.date
                     
                     conflito_edicao = df_outras[
@@ -310,8 +333,8 @@ else:
 
         data_consulta_str = data_consulta.strftime("%d/%m/%Y")
 
-        if not df_reservas.empty:
-            reservas_dia = df_reservas[df_reservas["Data"] == data_consulta_str]
+        if not df_ativas.empty:
+            reservas_dia = df_ativas[df_ativas["Data"] == data_consulta_str]
 
             if reservas_dia.empty:
                 st.success(f"🎉 **Todos os equipamentos estão totalmente livres no dia {data_consulta_str}!**")
