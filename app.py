@@ -1,326 +1,178 @@
-import datetime
-import os
-import uuid
-import base64
-import pandas as pd
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+import gspread
+import uuid
+from datetime import date
 
-# Localiza o arquivo de imagem no mesmo diretório do app.py
-DIR_APP = os.path.dirname(os.path.abspath(__file__))
-NOME_LOGO = "LogoMondrone.jpg"
-CAMINHO_LOGO = os.path.join(DIR_APP, NOME_LOGO)
-
-# Configuração da página
+# ---------------------------------------------------------
+# Configuração da página Streamlit
+# ---------------------------------------------------------
 st.set_page_config(
-    page_title="Reserva de Equipamentos - Colégio Mondrone",
-    page_icon=CAMINHO_LOGO if os.path.exists(CAMINHO_LOGO) else NOME_LOGO
+    page_title="Gestão de Equipamentos - Colégio Mondrone",
+    page_icon="💻",
+    layout="wide"
 )
 
-# Topo com a Logo e Título
-col_logo, col_titulo = st.columns([1, 4])
-with col_logo:
-    if os.path.exists(CAMINHO_LOGO):
-        st.image(CAMINHO_LOGO, width=110)
-    elif os.path.exists(NOME_LOGO):
-        st.image(NOME_LOGO, width=110)
-    else:
-        st.write("🏫")
-
-with col_titulo:
-    st.title("Reserva de Equipamentos")
-    st.markdown("<h2 style='color: #4A4A4A; margin-top: -15px; font-weight: 600;'>Colégio Mondrone</h2>", unsafe_allow_html=True)
-
-# Conexão com Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-def carregar_dados():
-    return conn.read(ttl=0)
+# ---------------------------------------------------------
+# Conexão com o Google Sheets via gspread / Secrets
+# ---------------------------------------------------------
+@st.cache_resource(ttl=60)
+def get_gspread_client():
+    return gspread.service_account_from_dict(st.secrets["gcp_service_account"])
 
 try:
-    df_reservas = carregar_dados()
-    if "Email" not in df_reservas.columns:
-        df_reservas["Email"] = ""
-except Exception:
-    df_reservas = pd.DataFrame(columns=["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email"])
+    gc = get_gspread_client()
+    # Nome do ficheiro da folha de cálculo no Google Drive
+    sheet_name = st.secrets.get("SPREADSHEET_NAME", "Reservas de Equipamentos - Mondrone")
+    sh = gc.open(sheet_name)
+    worksheet = sh.worksheet("Mondrone")
+except Exception as e:
+    st.error(f"Erro ao conectar à folha de cálculo do Google Sheets: {e}")
+    st.stop()
 
-LISTA_EQUIPAMENTOS = ["Tablets", "Netbooks", "Notebooks (Apenas 3º Ano)", "Chromebooks"]
-LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
+# ---------------------------------------------------------
+# Funções de Dados (Carregar, Guardar, Soft Delete)
+# ---------------------------------------------------------
+def carregar_dados():
+    """Carrega e trata os dados da aba Mondrone."""
+    dados = worksheet.get_all_records()
+    df = pd.DataFrame(dados)
+    
+    # Garantir que todas as colunas necessárias existem
+    colunas_esperadas = ["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email", "Status"]
+    for col in colunas_esperadas:
+        if col not in df.columns:
+            df[col] = ""
+    
+    # Se a coluna Status estiver em branco, define como ATIVO por padrão
+    df["Status"] = df["Status"].replace("", "ATIVO")
+    return df
 
-# Função para converter imagem em base64
-def carregar_b64(caminho):
-    if os.path.exists(caminho):
-        with open(caminho, "rb") as f:
-            return base64.b64encode(f.read()).decode()
-    return None
+def salvar_reserva(data_str, turno, aula, equipamento, professor, email):
+    """Adiciona uma nova reserva com Status = ATIVO."""
+    novo_id = uuid.uuid4().hex[:8]
+    nova_linha = [
+        novo_id,
+        data_str,
+        turno,
+        aula,
+        equipamento,
+        professor,
+        email,
+        "ATIVO"  # Coluna H (8)
+    ]
+    worksheet.append_row(nova_linha)
 
-caminho_icone = os.path.join(DIR_APP, "icone.png")
-if not os.path.exists(caminho_icone) and os.path.exists("icone.png"):
-    caminho_icone = "icone.png"
+def cancelar_reserva_soft_delete(id_reserva):
+    """Muda o estado na Coluna H (8) para CANCELADO sem apagar a linha."""
+    celula = worksheet.find(id_reserva, in_column=1)
+    if celula:
+        # Coluna 8 = Coluna H (Status)
+        worksheet.update_cell(celula.row, 8, "CANCELADO")
+        return True
+    return False
 
-b64_icone = carregar_b64(caminho_icone)
+# ---------------------------------------------------------
+# Interface Principal
+# ---------------------------------------------------------
+st.title("💻 Sistema de Reservas de Equipamentos")
+st.subheader("Colégio Mondrone")
 
-st.markdown("---")
+# Carrega os dados mais recentes
+df_todos = carregar_dados()
 
-# Cabeçalho da Identificação
-if b64_icone:
-    st.markdown(
-        f"""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
-            <img src="data:image/png;base64,{b64_icone}" width="26px" height="26px" style="object-fit: contain;">
-            <span style="font-size: 1.5rem; font-weight: 600; color: #31333F;">Identificação do Professor</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    st.subheader("Identificação do Professor")
+# Filtra no Streamlit apenas os registos que NÃO foram cancelados
+df_ativos = df_todos[df_todos["Status"] != "CANCELADO"]
 
-# Controle do Login na Sessão
-if "usuario_logado" not in st.session_state:
-    st.session_state["usuario_logado"] = False
+# Navegação por Separadores (Tabs)
+tab1, tab2, tab3 = st.tabs(["📅 Reservas Ativas", "➕ Nova Reserva", "❌ Cancelar Reserva"])
 
-if not st.session_state["usuario_logado"]:
-    with st.form("form_identificacao"):
-        col_nome, col_email = st.columns(2)
-        with col_nome:
-            nome_input = st.text_input("Nome:").strip()
-        with col_email:
-            email_input = st.text_input("E-mail Institucional (@escola.pr.gov.br):").strip().lower()
-        
-        btn_acessar = st.form_submit_button("🔑 Acessar Sistema", type="primary")
-
-    if btn_acessar:
-        if not nome_input or not email_input:
-            st.warning("⚠️ Preencha seu **Nome** e **E-mail Institucional** para continuar.")
-        elif not email_input.endswith("@escola.pr.gov.br"):
-            st.error("❌ **E-mail inválido:** Digite seu e-mail institucional terminado em @escola.pr.gov.br.")
-        else:
-            st.session_state["nome_professor"] = nome_input
-            st.session_state["email_professor"] = email_input
-            st.session_state["usuario_logado"] = True
-            st.rerun()
-
-else:
-    nome_professor = st.session_state["nome_professor"]
-    email_professor = st.session_state["email_professor"]
-
-    col_info, col_sair = st.columns([4, 1])
-    with col_info:
-        if b64_icone:
-            st.markdown(
-                f"""
-                <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 10px 15px; display: flex; align-items: center; gap: 8px; color: #155724;">
-                    <img src="data:image/png;base64,{b64_icone}" width="20px" height="20px" style="object-fit: contain;">
-                    <span><b>Professor(a):</b> {nome_professor}  |  ✉️ <b>E-mail:</b> {email_professor}</span>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        else:
-            st.success(f"**Professor(a):** {nome_professor} | ✉️ **E-mail:** {email_professor}")
-
-    with col_sair:
-        if st.button("🔄 Trocar Usuário"):
-            st.session_state["usuario_logado"] = False
-            st.rerun()
-
-    # =========================================================
-    # ÁREA DE RESERVAS (LIBERADA APÓS LOGIN)
-    # =========================================================
-    aba_criar, aba_gerenciar, aba_agenda = st.tabs([
-        "➕ Nova Reserva", 
-        "✏️ Minhas Reservas", 
-        "📅 Agenda Geral"
-    ])
-
-    # Regra de 24h de antecedência: a data mínima para reserva é AMANHÃ
-    data_minima = datetime.date.today() + datetime.timedelta(days=1)
-
-    # ---------------------------------------------------------
-    # ABA 1: NOVA RESERVA
-    # ---------------------------------------------------------
-    with aba_criar:
-        st.subheader("Agendar Equipamento")
-
-        if "sucesso_reserva" in st.session_state:
-            st.success(st.session_state.pop("sucesso_reserva"))
-        
-        data_reserva = st.date_input(
-            "Data da Reserva (Mínimo 24h de antecedência):", 
-            min_value=data_minima, 
-            value=data_minima, 
-            format="DD/MM/YYYY"
+# ---------------------------------------------------------
+# Separador 1: Visualizar Reservas Ativas
+# ---------------------------------------------------------
+with tab1:
+    st.markdown("### 📋 Agendamentos Confirmados")
+    if not df_ativos.empty:
+        # Exibe apenas as colunas relevantes ao utilizador
+        st.dataframe(
+            df_ativos[["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email"]],
+            use_container_width=True,
+            hide_index=True
         )
-        
-        if data_reserva.weekday() in [5, 6]:
-            st.warning("⚠️ Atenção: A data selecionada é um fim de semana.")
+    else:
+        st.info("Nenhuma reserva ativa encontrada de momento.")
 
-        col1, col2, col3 = st.columns(3)
+# ---------------------------------------------------------
+# Separador 2: Criar Nova Reserva
+# ---------------------------------------------------------
+with tab2:
+    st.markdown("### 📝 Registo de Novo Agendamento")
+    
+    with st.form("form_nova_reserva", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        
         with col1:
-            equipamento = st.selectbox("Equipamento:", LISTA_EQUIPAMENTOS)
-        with col2:
-            turno = st.selectbox("Turno:", LISTA_TURNOS)
+            data_reserva = st.date_input("Data do Agendamento", value=date.today())
+            turno = st.selectbox("Turno", ["Manhã", "Tarde", "Noite"])
+            aula = st.selectbox("Aula", ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"])
         
-        if turno == "Manhã":
-            aulas_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"]
-        else:
-            aulas_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula"]
-
-        with col3:
-            aula = st.selectbox("Aula:", aulas_disponiveis)
-
-        if st.button("Confirmar Reserva", type="primary"):
-            if data_reserva.weekday() in [5, 6]:
-                st.error("❌ Não é possível realizar reservas para sábados ou domingos.")
-            else:
-                conflito = False
-                if not df_reservas.empty:
-                    datas_planilha = pd.to_datetime(df_reservas["Data"], dayfirst=True, errors="coerce").dt.date
-
-                    linhas_conflito = df_reservas[
-                        (df_reservas["Equipamento"].astype(str).str.strip() == equipamento.strip()) &
-                        (datas_planilha == data_reserva) &
-                        (df_reservas["Turno"].astype(str).str.strip() == turno.strip()) &
-                        (df_reservas["Aula"].astype(str).str.strip() == aula.strip())
-                    ]
-                    if len(linhas_conflito) > 0:
-                        conflito = True
-
-                if conflito:
-                    st.error(f"❌ **CONFLITO DE RESERVA:** O equipamento **{equipamento}** já está reservado no dia **{data_reserva.strftime('%d/%m/%Y')}** ({turno} - {aula}).")
-                else:
-                    data_formatada = data_reserva.strftime("%d/%m/%Y")
-                    
-                    nova_reserva = pd.DataFrame([{
-                        "ID": str(uuid.uuid4())[:8],
-                        "Data": data_formatada,
-                        "Turno": turno,
-                        "Aula": aula,
-                        "Equipamento": equipamento,
-                        "Professor": nome_professor,
-                        "Email": email_professor
-                    }])
-
-                    df_atualizado = pd.concat([df_reservas, nova_reserva], ignore_index=True)
-                    conn.update(worksheet="Página1", data=df_atualizado)
-                    
-                    st.session_state["sucesso_reserva"] = "✅ **Reserva realizada com sucesso!**"
-                    st.rerun()
-
-    # ---------------------------------------------------------
-    # ABA 2: GERENCIAR MINHAS RESERVAS
-    # ---------------------------------------------------------
-    with aba_gerenciar:
-        st.subheader(f"Reservas de {nome_professor}")
-
-        if "sucesso_gerenciar" in st.session_state:
-            st.success(st.session_state.pop("sucesso_gerenciar"))
-
-        minhas_reservas = df_reservas[df_reservas["Email"].astype(str).str.lower() == email_professor]
-
-        if minhas_reservas.empty:
-            st.info("Nenhuma reserva encontrada para este e-mail.")
-        else:
-            st.dataframe(minhas_reservas[["Data", "Turno", "Aula", "Equipamento", "Professor"]], use_container_width=True)
-
-            opcoes_ids = minhas_reservas["ID"].tolist()
-            reserva_id_selecionada = st.selectbox(
-                "Selecione a reserva que deseja alterar ou excluir:", 
-                opcoes_ids,
-                format_func=lambda x: f"ID: {x} - {minhas_reservas[minhas_reservas['ID']==x]['Data'].values[0]} ({minhas_reservas[minhas_reservas['ID']==x]['Equipamento'].values[0]})"
+        with col2:
+            equipamento = st.selectbox(
+                "Equipamento", 
+                [
+                    "Tablets", 
+                    "Netbooks", 
+                    "Chromebooks", 
+                    "Notebooks (Apenas 3º Ano)", 
+                    "Projetor / Caixa de Som"
+                ]
             )
-
-            reserva_atual = minhas_reservas[minhas_reservas["ID"] == reserva_id_selecionada].iloc[0]
-
-            col_alt, col_exc = st.columns(2)
-
-            with col_exc:
-                st.markdown("### 🗑️ Excluir Reserva")
-                if st.button("Excluir esta Reserva"):
-                    df_atualizado = df_reservas[df_reservas["ID"] != reserva_id_selecionada]
-                    conn.update(worksheet="Página1", data=df_atualizado)
-                    st.session_state["sucesso_gerenciar"] = "✅ Reserva excluída com sucesso!"
-                    st.rerun()
-
-            with col_alt:
-                st.markdown("### ✏️ Editar Dados")
-                
-                data_obj_atual = pd.to_datetime(reserva_atual["Data"], dayfirst=True, errors="coerce").date()
-                if pd.isna(data_obj_atual) or data_obj_atual < data_minima:
-                    data_obj_atual = data_minima
-
-                nova_data = st.date_input(
-                    "Nova Data:", 
-                    value=data_obj_atual,
-                    min_value=data_minima,
-                    format="DD/MM/YYYY",
-                    key=f"edit_data_{reserva_id_selecionada}"
-                )
-                
-                idx_eq = LISTA_EQUIPAMENTOS.index(reserva_atual["Equipamento"]) if reserva_atual["Equipamento"] in LISTA_EQUIPAMENTOS else 0
-                idx_tur = LISTA_TURNOS.index(reserva_atual["Turno"]) if reserva_atual["Turno"] in LISTA_TURNOS else 0
-
-                novo_equipamento = st.selectbox("Novo Equipamento:", LISTA_EQUIPAMENTOS, index=idx_eq, key=f"edit_eq_{reserva_id_selecionada}")
-                novo_turno = st.selectbox("Novo Turno:", LISTA_TURNOS, index=idx_tur, key=f"edit_tur_{reserva_id_selecionada}")
-
-                if novo_turno == "Manhã":
-                    aulas_edit_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula", "6ª Aula"]
-                else:
-                    aulas_edit_disponiveis = ["1ª Aula", "2ª Aula", "3ª Aula", "4ª Aula", "5ª Aula"]
-
-                idx_aul = aulas_edit_disponiveis.index(reserva_atual["Aula"]) if reserva_atual["Aula"] in aulas_edit_disponiveis else 0
-
-                nova_aula = st.selectbox("Nova Aula:", aulas_edit_disponiveis, index=idx_aul, key=f"edit_aul_{reserva_id_selecionada}")
-
-                if st.button("Salvar Alterações"):
-                    df_outras = df_reservas[df_reservas["ID"] != reserva_id_selecionada]
-                    datas_outras = pd.to_datetime(df_outras["Data"], dayfirst=True, errors="coerce").dt.date
-                    
-                    conflito_edicao = df_outras[
-                        (df_outras["Equipamento"].astype(str).str.strip() == novo_equipamento.strip()) &
-                        (datas_outras == nova_data) &
-                        (df_outras["Turno"].astype(str).str.strip() == novo_turno.strip()) &
-                        (df_outras["Aula"].astype(str).str.strip() == nova_aula.strip())
-                    ]
-
-                    if len(conflito_edicao) > 0:
-                        st.error("❌ Conflito! Equipamento indisponível nesta data e horário.")
-                    else:
-                        df_reservas.loc[df_reservas["ID"] == reserva_id_selecionada, ["Data", "Equipamento", "Turno", "Aula", "Professor", "Email"]] = [
-                            nova_data.strftime("%d/%m/%Y"), novo_equipamento, novo_turno, nova_aula, nome_professor, email_professor
-                        ]
-                        conn.update(worksheet="Página1", data=df_reservas)
-                        st.session_state["sucesso_gerenciar"] = "✅ Reserva atualizada com sucesso!"
-                        st.rerun()
-
-    # ---------------------------------------------------------
-    # ABA 3: AGENDA GERAL (CONSULTA DE TODOS OS AGENDAMENTOS)
-    # ---------------------------------------------------------
-    with aba_agenda:
-        st.subheader("📋 Agenda Geral de Equipamentos")
-        st.write("Consulte a disponibilidade de qualquer equipamento escolhendo a data abaixo:")
-
-        data_consulta = st.date_input(
-            "Selecione o dia para consultar:", 
-            value=datetime.date.today(), 
-            format="DD/MM/YYYY",
-            key="data_consulta_tab"
-        )
-
-        data_consulta_str = data_consulta.strftime("%d/%m/%Y")
-
-        if not df_reservas.empty:
-            reservas_dia = df_reservas[df_reservas["Data"] == data_consulta_str]
-
-            if reservas_dia.empty:
-                st.success(f"🎉 **Todos os equipamentos estão totalmente livres no dia {data_consulta_str}!**")
+            professor = st.text_input("Nome do Professor")
+            email = st.text_input("E-mail do Professor")
+        
+        submit_btn = st.form_submit_button("Confirmar Reserva")
+        
+        if submit_btn:
+            if not professor or not email:
+                st.error("Por favor, preencha o Nome e o E-mail do Professor.")
             else:
-                st.info(f"📌 **Equipamentos já agendados para {data_consulta_str}:**")
-                st.dataframe(
-                    reservas_dia[["Turno", "Aula", "Equipamento", "Professor"]], 
-                    use_container_width=True, 
-                    hide_index=True
-                )
-        else:
-            st.success(f"🎉 **Nenhum agendamento cadastrado no sistema.**")
+                data_formatada = data_reserva.strftime("%d/%m/%Y")
+                salvar_reserva(data_formatada, turno, aula, equipamento, professor, email)
+                st.success(f"Reserva efetuada com sucesso para {data_formatada} ({equipamento})!")
+                st.rerun()
+
+# ---------------------------------------------------------
+# Separador 3: Cancelar Reserva (Soft Delete)
+# ---------------------------------------------------------
+with tab3:
+    st.markdown("### ⚠️ Cancelamento Seguro de Reserva")
+    st.write("O cancelamento **não elimina** dados da folha de cálculo; apenas altera o estado da reserva para `CANCELADO`.")
+    
+    if not df_ativos.empty:
+        # Opções formatadas para o menu de seleção
+        opcoes_cancelamento = {
+            f"{row['ID']} | {row['Data']} | {row['Turno']} - {row['Aula']} | {row['Equipamento']} ({row['Professor']})": row['ID']
+            for _, row in df_ativos.iterrows()
+        }
+        
+        reserva_selecionada_label = st.selectbox(
+            "Selecione a reserva que deseja cancelar:",
+            options=list(opcoes_cancelamento.keys())
+        )
+        
+        id_para_cancelar = opcoes_cancelamento[reserva_selecionada_label]
+        
+        confirmar = st.checkbox("Confirmo que pretendo cancelar esta reserva.")
+        
+        if st.button("Confirmar Cancelamento"):
+            if confirmar:
+                sucesso = cancelar_reserva_soft_delete(id_para_cancelar)
+                if sucesso:
+                    st.success("Reserva marcada como CANCELADA com sucesso!")
+                    st.rerun()
+                else:
+                    st.error("Erro ao localizar a reserva na folha de cálculo.")
+            else:
+                st.warning("Marque a caixa de confirmação antes de prosseguir.")
+    else:
+        st.info("Não existem reservas ativas disponíveis para cancelamento.")
