@@ -6,6 +6,12 @@ import pandas as pd
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 
+# ---------------------------------------------------------
+# CONFIGURAÇÃO DA PLANILHA
+# Altere para o nome EXATO da aba da sua planilha no Google Sheets
+NOME_ABA = "Mondrone"  # Ex: "Mondrone", "Sheet1", "Página 1", etc.
+# ---------------------------------------------------------
+
 # Localiza o arquivo de imagem no mesmo diretório do app.py
 DIR_APP = os.path.dirname(os.path.abspath(__file__))
 NOME_LOGO = "LogoMondrone.jpg"
@@ -38,13 +44,12 @@ with col_titulo:
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def carregar_dados():
-    return conn.read(ttl=0)
+    return conn.read(worksheet=NOME_ABA, ttl=0)
 
 try:
     df_reservas = carregar_dados()
     if "Email" not in df_reservas.columns:
         df_reservas["Email"] = ""
-    # ALTERAÇÃO 1: Garante a coluna Status para controle do Soft Delete
     if "Status" not in df_reservas.columns:
         df_reservas["Status"] = "ATIVO"
     else:
@@ -222,7 +227,7 @@ else:
                     }])
 
                     df_atualizado = pd.concat([df_reservas, nova_reserva], ignore_index=True)
-                    conn.update(worksheet="Página1", data=df_atualizado)
+                    conn.update(worksheet=NOME_ABA, data=df_atualizado)
                     
                     st.session_state["sucesso_reserva"] = "✅ **Reserva realizada com sucesso!**"
                     st.rerun()
@@ -260,9 +265,8 @@ else:
             with col_exc:
                 st.markdown("### 🗑️ Excluir Reserva")
                 if st.button("Excluir esta Reserva"):
-                    # ALTERAÇÃO 2: Soft Delete (Muda o Status para CANCELADO sem excluir a linha da planilha)
                     df_reservas.loc[df_reservas["ID"] == reserva_id_selecionada, "Status"] = "CANCELADO"
-                    conn.update(worksheet="Página1", data=df_reservas)
+                    conn.update(worksheet=NOME_ABA, data=df_reservas)
                     st.session_state["sucesso_gerenciar"] = "✅ Reserva cancelada com sucesso!"
                     st.rerun()
 
@@ -313,7 +317,7 @@ else:
                         df_reservas.loc[df_reservas["ID"] == reserva_id_selecionada, ["Data", "Equipamento", "Turno", "Aula", "Professor", "Email"]] = [
                             nova_data.strftime("%d/%m/%Y"), novo_equipamento, novo_turno, nova_aula, nome_professor, email_professor
                         ]
-                        conn.update(worksheet="Página1", data=df_reservas)
+                        conn.update(worksheet=NOME_ABA, data=df_reservas)
                         st.session_state["sucesso_gerenciar"] = "✅ Reserva atualizada com sucesso!"
                         st.rerun()
 
