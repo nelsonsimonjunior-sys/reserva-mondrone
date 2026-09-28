@@ -117,7 +117,7 @@ if not st.session_state["usuario_logado"]:
         with col_email:
             email_input = st.text_input("E-mail Institucional (@escola.pr.gov.br):").strip().lower()
         
-        btn_acessar = st.form_submit_button("🔑 Aceder ao Sistema", type="primary")
+        btn_acessar = st.form_submit_button("🔑 Acessar o Sistema", type="primary")
 
     if btn_acessar:
         if not nome_input or not email_input:
