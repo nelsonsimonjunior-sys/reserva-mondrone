@@ -1,6 +1,7 @@
 import datetime
 import os
 import uuid
+import base64
 import time
 import pandas as pd
 import streamlit as st
@@ -45,7 +46,7 @@ with col_titulo:
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception:
-    st.error("⚠️️ Ocorreu um problema ao inicializar a ligação com o Google Sheets.")
+    st.error("⚠️ Ocorreu um problema ao inicializar a ligação com o Google Sheets.")
     st.info("Por favor, recarregue a página em alguns instantes.")
     st.stop()
 
@@ -147,10 +148,37 @@ LISTA_EQUIPAMENTOS = [
 ]
 LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 
+# Carregamento do ícone de cima
+def carregar_b64(caminho):
+    try:
+        if os.path.exists(caminho):
+            with open(caminho, "rb") as f:
+                return base64.b64encode(f.read()).decode()
+    except Exception:
+        pass
+    return None
+
+caminho_icone = os.path.join(DIR_APP, "icone.png")
+if not os.path.exists(caminho_icone) and os.path.exists("icone.png"):
+    caminho_icone = "icone.png"
+
+b64_icone = carregar_b64(caminho_icone)
+
 st.markdown("---")
 
-# Cabeçalho da Identificação limpo
-st.subheader("👤 Identificação do Professor")
+# Título da Identificação com a Imagem de Cima
+if b64_icone:
+    st.markdown(
+        f"""
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+            <img src="data:image/png;base64,{b64_icone}" width="28px" height="28px" style="object-fit: contain;">
+            <span style="font-size: 1.5rem; font-weight: 600;">Identificação do Professor</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    st.subheader("👤 Identificação do Professor")
 
 # Controlo da Sessão de Utilizador
 if "usuario_logado" not in st.session_state:
