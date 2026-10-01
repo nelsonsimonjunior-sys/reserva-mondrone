@@ -166,7 +166,7 @@ b64_icone = carregar_b64(caminho_icone)
 
 st.markdown("---")
 
-# Título da Identificação
+# Título da Identificação com a imagem de cima
 if b64_icone:
     st.markdown(
         f"""
@@ -389,74 +389,31 @@ else:
                             st.rerun()
 
     # ---------------------------------------------------------
-    # ABA 3: AGENDA GERAL (COM OPÇÃO DE CONSULTA POR DIA OU POR SEMANA)
+    # ABA 3: AGENDA GERAL (CONSULTA POR DIA)
     # ---------------------------------------------------------
     with aba_agenda:
         st.subheader("📋 Agenda Geral de Equipamentos")
+        st.write("Consulte a disponibilidade de qualquer equipamento escolhendo a data abaixo:")
 
-        modo_consulta = st.radio(
-            "Modo de Visualização:",
-            ["Por Dia", "Por Semana"],
-            horizontal=True,
-            key="modo_consulta_agenda"
+        data_consulta = st.date_input(
+            "Selecione o dia para consultar:", 
+            value=datetime.date.today(), 
+            format="DD/MM/YYYY",
+            key="data_consulta_tab"
         )
 
-        if modo_consulta == "Por Dia":
-            data_consulta = st.date_input(
-                "Selecione o dia para consultar:", 
-                value=datetime.date.today(), 
-                format="DD/MM/YYYY",
-                key="data_consulta_tab"
-            )
+        if not df_ativas.empty:
+            datas_agenda = pd.to_datetime(df_ativas["Data"], format="mixed", dayfirst=True, errors="coerce").dt.date
+            reservas_dia = df_ativas[datas_agenda == data_consulta]
 
-            if not df_ativas.empty:
-                datas_agenda = pd.to_datetime(df_ativas["Data"], format="mixed", dayfirst=True, errors="coerce").dt.date
-                reservas_dia = df_ativas[datas_agenda == data_consulta]
-
-                if reservas_dia.empty:
-                    st.success(f"🎉 **Todos os equipamentos estão totalmente livres no dia {data_consulta.strftime('%d/%m/%Y')}!**")
-                else:
-                    st.info(f"📌 **Equipamentos agendados para {data_consulta.strftime('%d/%m/%Y')}:**")
-                    st.dataframe(
-                        reservas_dia[["Turno", "Aula", "Equipamento", "Professor"]], 
-                        use_container_width=True, 
-                        hide_index=True
-                    )
+            if reservas_dia.empty:
+                st.success(f"🎉 **Todos os equipamentos estão totalmente livres no dia {data_consulta.strftime('%d/%m/%Y')}!**")
             else:
-                st.success("🎉 **Nenhum agendamento cadastrado no sistema.**")
-
-        else: # CONSULTA POR SEMANA
-            data_ref = st.date_input(
-                "Selecione um dia da semana desejada:", 
-                value=datetime.date.today(), 
-                format="DD/MM/YYYY",
-                key="data_semana_tab"
-            )
-            
-            # Calcula a Segunda-feira (dia 0) e a Sexta-feira (dia 4)
-            inicio_semana = data_ref - datetime.timedelta(days=data_ref.weekday())
-            fim_semana = inicio_semana + datetime.timedelta(days=4)
-
-            st.caption(f"📅 **Período exibido:** {inicio_semana.strftime('%d/%m/%Y')} (Segunda-feira) até {fim_semana.strftime('%d/%m/%Y')} (Sexta-feira)")
-
-            if not df_ativas.empty:
-                datas_agenda = pd.to_datetime(df_ativas["Data"], format="mixed", dayfirst=True, errors="coerce").dt.date
-                mask_semana = (datas_agenda >= inicio_semana) & (datas_agenda <= fim_semana)
-                reservas_semana = df_ativas[mask_semana].copy()
-
-                if reservas_semana.empty:
-                    st.success(f"🎉 **Todos os equipamentos estão totalmente livres na semana de {inicio_semana.strftime('%d/%m/%Y')} a {fim_semana.strftime('%d/%m/%Y')}!**")
-                else:
-                    st.info(f"📌 **Equipamentos agendados para a semana ({inicio_semana.strftime('%d/%m/%Y')} a {fim_semana.strftime('%d/%m/%Y')}):**")
-                    
-                    # Ordena as reservas por data, turno e aula
-                    reservas_semana["_dt_temp"] = pd.to_datetime(reservas_semana["Data"], format="mixed", dayfirst=True, errors="coerce")
-                    reservas_semana = reservas_semana.sort_values(by=["_dt_temp", "Turno", "Aula"])
-
-                    st.dataframe(
-                        reservas_semana[["Data", "Turno", "Aula", "Equipamento", "Professor"]], 
-                        use_container_width=True, 
-                        hide_index=True
-                    )
-            else:
-                st.success("🎉 **Nenhum agendamento cadastrado no sistema.**")
+                st.info(f"📌 **Equipamentos agendados para {data_consulta.strftime('%d/%m/%Y')}:**")
+                st.dataframe(
+                    reservas_dia[["Turno", "Aula", "Equipamento", "Professor"]], 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+        else:
+            st.success("🎉 **Nenhum agendamento cadastrado no sistema.**")
