@@ -1,18 +1,19 @@
 import datetime
 import os
 import uuid
-import base64
+import time
 import pandas as pd
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PLANILHA
+# CONFIGURAÇÃO E BLINDAGEM DA PLANILHA
 NOME_ABA = "Mondrone"
 COLUNAS_PADRAO = ["ID", "Data", "Turno", "Aula", "Equipamento", "Professor", "Email", "Status"]
+MAX_TENTATIVAS = 3
+ESPERA_ENTRE_TENTATIVAS = 1
 # ---------------------------------------------------------
 
-# Localiza o arquivo de imagem no mesmo diretório do app.py
 DIR_APP = os.path.dirname(os.path.abspath(__file__))
 NOME_LOGO = "LogoMondrone.jpg"
 CAMINHO_LOGO = os.path.join(DIR_APP, NOME_LOGO)
@@ -20,10 +21,10 @@ CAMINHO_LOGO = os.path.join(DIR_APP, NOME_LOGO)
 # Configuração da página
 st.set_page_config(
     page_title="Reserva de Equipamentos - Colégio Mondrone",
-    page_icon=CAMINHO_LOGO if os.path.exists(CAMINHO_LOGO) else NOME_LOGO
+    page_icon=CAMINHO_LOGO if os.path.exists(CAMINHO_LOGO) else "🏫"
 )
 
-# Topo com o Logotipo e Título
+# Topo com o Logótipo e Título
 col_logo, col_titulo = st.columns([1, 4])
 with col_logo:
     if os.path.exists(CAMINHO_LOGO):
@@ -40,11 +41,16 @@ with col_titulo:
         unsafe_allow_html=True
     )
 
-# Conexão com Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Inicialização segura da conexão com Google Sheets
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception:
+    st.error("⚠️️ Ocorreu um problema ao inicializar a ligação com o Google Sheets.")
+    st.info("Por favor, recarregue a página em alguns instantes.")
+    st.stop()
 
 def normalizar_texto(texto):
-    """Remove espaços extras, converte para minúsculas e padroniza símbolos de grau/ordem."""
+    """Remove espaços extras, converte para minúsculas e padroniza símbolos."""
     if pd.isna(texto) or texto is None:
         return ""
     t = str(texto).strip().lower()
@@ -52,56 +58,67 @@ def normalizar_texto(texto):
     return t
 
 def carregar_dados_frescos():
-    """Lê os dados mais recentes diretamente do Google Sheets sem cache e realiza sanitização."""
-    try:
-        df = conn.read(worksheet=NOME_ABA, ttl=0)
-        if df is None or df.empty:
-            df = pd.DataFrame(columns=COLUNAS_PADRAO)
-        else:
-            # Remove linhas completamente vazias
-            df = df.dropna(how="all")
+    """Lê os dados mais recentes do Google Sheets com mecanismo de retentativas automáticas."""
+    for tentativa in range(1, MAX_TENTATIVAS + 1):
+        try:
+            df = conn.read(worksheet=NOME_ABA, ttl=0)
+            if df is None or df.empty:
+                return pd.DataFrame(columns=COLUNAS_PADRAO)
             
-            # Garante que todas as colunas padrão existam
+            df = df.dropna(how="all")
             for col in COLUNAS_PADRAO:
                 if col not in df.columns:
                     df[col] = ""
             
             df = df[COLUNAS_PADRAO]
-            
-            # Preenche valores vazios de Status
             df["Status"] = df["Status"].fillna("ATIVO")
             df["Status"] = df["Status"].replace("", "ATIVO")
             df = df.fillna("")
-            
-            # Mantém apenas linhas com ID válido
             df = df[df["ID"].astype(str).str.strip() != ""]
-
-        return df
-    except Exception as e:
-        st.error(f"⚠️ Erro ao conectar ao Google Sheets na aba '{NOME_ABA}': {e}")
-        st.warning("Verifique se a aba com o nome correto existe na sua planilha do Google Sheets.")
-        st.stop()
+            return df
+        
+        except Exception:
+            if tentativa < MAX_TENTATIVAS:
+                time.sleep(ESPERA_ENTRE_TENTATIVAS)
+            else:
+                st.error("⚠️ Não foi possível carregar os dados da planilha no momento.")
+                st.warning("Verifique a sua ligação à internet ou tente novamente em alguns segundos.")
+                st.stop()
 
 def salvar_dados(df):
-    """Salva os dados de forma limpa no Google Sheets para evitar corrupção de linhas."""
+    """Guarda os dados no Google Sheets com retentativas automáticas e tratamento de erros."""
     df_salvar = df.copy()
     for col in COLUNAS_PADRAO:
         if col not in df_salvar.columns:
             df_salvar[col] = ""
     df_salvar = df_salvar[COLUNAS_PADRAO].fillna("")
     df_salvar = df_salvar.astype(str)
-    conn.update(worksheet=NOME_ABA, data=df_salvar)
+
+    for tentativa in range(1, MAX_TENTATIVAS + 1):
+        try:
+            conn.update(worksheet=NOME_ABA, data=df_salvar)
+            return True
+        except Exception:
+            if tentativa < MAX_TENTATIVAS:
+                time.sleep(ESPERA_ENTRE_TENTATIVAS)
+            else:
+                st.error("❌ Erro ao guardar as informações na planilha.")
+                st.warning("A alteração não pôde ser salva. Por favor, clique no botão novamente.")
+                return False
 
 def verificar_conflito(df_fresco, data_reserva, equipamento, turno, aula, id_ignorar=None):
-    """Verifica se já existe reserva ativa para o mesmo Equipamento, Data, Turno e Aula."""
+    """Verifica de forma infalível se o equipamento já está ocupado no horário selecionado."""
+    if df_fresco.empty:
+        return False
+
     df_ativas = df_fresco[df_fresco["Status"].astype(str).str.upper() != "CANCELADO"].copy()
+    
     if id_ignorar:
         df_ativas = df_ativas[df_ativas["ID"].astype(str).str.strip() != str(id_ignorar).strip()]
         
     if df_ativas.empty:
         return False
 
-    # Converte datas de forma ultra flexível para lidar com digitação manual na planilha
     datas_parsed = pd.to_datetime(df_ativas["Data"], format="mixed", dayfirst=True, errors="coerce").dt.date
 
     eq_alvo = normalizar_texto(equipamento)
@@ -117,11 +134,11 @@ def verificar_conflito(df_fresco, data_reserva, equipamento, turno, aula, id_ign
                 return True
     return False
 
-# Carregamento inicial de dados
+# Carregamento seguro dos dados iniciais
 df_reservas = carregar_dados_frescos()
 df_ativas = df_reservas[df_reservas["Status"].astype(str).str.upper() != "CANCELADO"].copy()
 
-# LISTA ATUALIZADA DE EQUIPAMENTOS
+# LISTA OFICIAL DE EQUIPAMENTOS E TURNOS
 LISTA_EQUIPAMENTOS = [
     "Tablets",
     "Netbooks",
@@ -130,36 +147,12 @@ LISTA_EQUIPAMENTOS = [
 ]
 LISTA_TURNOS = ["Manhã", "Tarde", "Noite"]
 
-# Função para converter imagem em base64
-def carregar_b64(caminho):
-    if os.path.exists(caminho):
-        with open(caminho, "rb") as f:
-            return base64.b64encode(f.read()).decode()
-    return None
-
-caminho_icone = os.path.join(DIR_APP, "icone.png")
-if not os.path.exists(caminho_icone) and os.path.exists("icone.png"):
-    caminho_icone = "icone.png"
-
-b64_icone = carregar_b64(caminho_icone)
-
 st.markdown("---")
 
-# Cabeçalho da Identificação
-if b64_icone:
-    st.markdown(
-        f"""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
-            <img src="data:image/png;base64,{b64_icone}" width="26px" height="26px" style="object-fit: contain;">
-            <span style="font-size: 1.5rem; font-weight: 600;">Identificação do Professor</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    st.subheader("Identificação do Professor")
+# Cabeçalho da Identificação limpo
+st.subheader("👤 Identificação do Professor")
 
-# Controle da Sessão de Usuário
+# Controlo da Sessão de Utilizador
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = False
 
@@ -190,7 +183,7 @@ else:
 
     col_info, col_sair = st.columns([4, 1])
     with col_info:
-        st.success(f"👤 **Professor(a):** {nome_professor} | ✉️ **E-mail:** {email_professor}")
+        st.success(f"**Professor(a):** {nome_professor} | ✉️ **E-mail:** {email_professor}")
 
     with col_sair:
         if st.button("🔄 Alterar Usuário"):
@@ -198,7 +191,7 @@ else:
             st.rerun()
 
     # =========================================================
-    # ÁREA DE RESERVAS (LIBERADA APÓS LOGIN)
+    # ÁREA DE RESERVAS
     # =========================================================
     aba_criar, aba_gerenciar, aba_agenda = st.tabs([
         "➕ Nova Reserva", 
@@ -206,7 +199,6 @@ else:
         "📅 Agenda Geral"
     ])
 
-    # Regra de 24h de antecedência: a data mínima para reserva é AMANHÃ
     data_minima = datetime.date.today() + datetime.timedelta(days=1)
 
     # ---------------------------------------------------------
@@ -246,7 +238,6 @@ else:
             if data_reserva.weekday() in [5, 6]:
                 st.error("❌ Não é possível realizar reservas para sábados ou domingos.")
             else:
-                # RELEITURA EM TEMPO REAL ANTES DE VALIDAR E SALVAR
                 df_fresco = carregar_dados_frescos()
                 
                 tem_conflito = verificar_conflito(
@@ -274,10 +265,9 @@ else:
                     }])
 
                     df_atualizado = pd.concat([df_fresco, nova_reserva], ignore_index=True)
-                    salvar_dados(df_atualizado)
-                    
-                    st.session_state["sucesso_reserva"] = "✅ **Reserva realizada com sucesso!**"
-                    st.rerun()
+                    if salvar_dados(df_atualizado):
+                        st.session_state["sucesso_reserva"] = "✅ **Reserva realizada com sucesso!**"
+                        st.rerun()
 
     # ---------------------------------------------------------
     # ABA 2: GERENCIAR MINHAS RESERVAS
@@ -314,9 +304,9 @@ else:
                 if st.button("Excluir esta Reserva"):
                     df_fresco = carregar_dados_frescos()
                     df_fresco.loc[df_fresco["ID"].astype(str) == str(reserva_id_selecionada), "Status"] = "CANCELADO"
-                    salvar_dados(df_fresco)
-                    st.session_state["sucesso_gerenciar"] = "✅ Reserva cancelada com sucesso!"
-                    st.rerun()
+                    if salvar_dados(df_fresco):
+                        st.session_state["sucesso_gerenciar"] = "✅ Reserva cancelada com sucesso!"
+                        st.rerun()
 
             with col_alt:
                 st.markdown("### ✏️ Editar Dados")
@@ -366,12 +356,12 @@ else:
                         df_fresco.loc[df_fresco["ID"].astype(str) == str(reserva_id_selecionada), ["Data", "Equipamento", "Turno", "Aula", "Professor", "Email"]] = [
                             nova_data.strftime("%d/%m/%Y"), novo_equipamento, novo_turno, nova_aula, nome_professor, email_professor
                         ]
-                        salvar_dados(df_fresco)
-                        st.session_state["sucesso_gerenciar"] = "✅ Reserva atualizada com sucesso!"
-                        st.rerun()
+                        if salvar_dados(df_fresco):
+                            st.session_state["sucesso_gerenciar"] = "✅ Reserva atualizada com sucesso!"
+                            st.rerun()
 
     # ---------------------------------------------------------
-    # ABA 3: AGENDA GERAL (CONSULTA DE TODOS OS AGENDAMENTOS)
+    # ABA 3: AGENDA GERAL
     # ---------------------------------------------------------
     with aba_agenda:
         st.subheader("📋 Agenda Geral de Equipamentos")
